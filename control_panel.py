@@ -169,14 +169,17 @@ def make_vitals(state: dict) -> Panel:
 
 
 def make_status(state: dict) -> Panel:
-    """Create status panel with model and version."""
+    """Create status panel with model, version, and path."""
     model = state.get("model", "")
     cc_version = state.get("cc_version", "")
+    cwd = state.get("cwd", "")
 
     content = Text()
     content.append(f"  {model}\n", style="magenta")
     if cc_version:
-        content.append(f"  v{cc_version}", style="dim")
+        content.append(f"  v{cc_version}\n", style="dim")
+    if cwd:
+        content.append(f"  {cwd}", style="cyan")
 
     return Panel(
         content,
@@ -296,7 +299,7 @@ def build_layout(state: dict, activities: list) -> Layout:
     )
 
     layout["main"].split_column(
-        Layout(name="status", size=4),
+        Layout(name="status", size=5),
         Layout(name="vitals", size=5),
         Layout(name="git", size=12),
         Layout(name="plan"),

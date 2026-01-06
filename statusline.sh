@@ -418,17 +418,23 @@ cat > "$HOME/.terminaut/state.json" <<EOF
 }
 EOF
 
-# ---- Auto-launch Terminaut panel if not running ----
-if ! pgrep -f "control_panel.py" >/dev/null 2>&1; then
-  # Check if we're in Kitty terminal
-  if [ -n "$KITTY_WINDOW_ID" ]; then
+# ---- Auto-launch Terminaut panel if not running in this Kitty instance ----
+if [ -n "$KITTY_WINDOW_ID" ]; then
+  # Check if Terminaut window exists in current Kitty instance
+  has_terminaut=$(kitten @ ls 2>/dev/null | grep -c '"title": "Terminaut"' || echo "0")
+  if [ "$has_terminaut" -eq 0 ]; then
     # Launch panel in side split
     (
-      kitten @ goto-layout tall 2>/dev/null
-      kitten @ launch --location=vsplit --title=Terminaut ~/.terminaut/venv/bin/python ~/.terminaut/control_panel.py 2>/dev/null
-      sleep 0.3
-      kitten @ action layout_action bias 67 2>/dev/null
-    ) &
+      kitten @ goto-layout tall >/dev/null 2>&1
+      kitten @ launch --location=vsplit --title=Terminaut ~/.terminaut/venv/bin/python ~/.terminaut/control_panel.py >/dev/null 2>&1
+      # Apply bias multiple times to ensure it sticks
+      sleep 0.5
+      kitten @ action layout_action bias 67 >/dev/null 2>&1
+      sleep 0.5
+      kitten @ action layout_action bias 67 >/dev/null 2>&1
+      sleep 0.5
+      kitten @ action layout_action bias 67 >/dev/null 2>&1
+    ) >/dev/null 2>&1 &
   fi
 fi
 
