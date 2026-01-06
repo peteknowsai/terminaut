@@ -129,12 +129,13 @@ rst() { if [ "$use_color" -eq 1 ]; then printf '\033[0m'; fi; }
 git_branch=""
 git_uncommitted=0
 git_ahead_dev=0
-git_ahead_master=0
+git_ahead_main=0
 git_open_prs="0"
 git_pr_list="[]"
 
 if git rev-parse --git-dir >/dev/null 2>&1; then
   git_branch=$(git branch --show-current 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+  git_repo_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "")
 
   # Get uncommitted changes count (staged + unstaged + untracked)
   git_uncommitted=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
@@ -144,9 +145,9 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     git_ahead_dev=$(git rev-list dev..HEAD --count 2>/dev/null || echo 0)
   fi
 
-  # Get commits ahead of master branch (if master exists and we're not on it)
-  if [ "$git_branch" != "master" ] && git rev-parse --verify master >/dev/null 2>&1; then
-    git_ahead_master=$(git rev-list master..HEAD --count 2>/dev/null || echo 0)
+  # Get commits ahead of main branch (if main exists and we're not on it)
+  if [ "$git_branch" != "main" ] && git rev-parse --verify main >/dev/null 2>&1; then
+    git_ahead_main=$(git rev-list main..HEAD --count 2>/dev/null || echo 0)
   fi
 
   # Get open PRs for this repo (with 2 second timeout, cached for 60s)
@@ -387,20 +388,28 @@ fi
 # All output suppressed, only state file is written
 
 # ---- Write state for Terminaut/Kitty tab bar ----
-mkdir -p "$HOME/.terminaut"
+mkdir -p "$HOME/.terminaut/states"
+
+# Use KITTY_WINDOW_ID for per-tab state, fallback to shared state
+if [ -n "$KITTY_WINDOW_ID" ]; then
+  STATE_FILE="$HOME/.terminaut/states/state-${KITTY_WINDOW_ID}.json"
+else
+  STATE_FILE="$HOME/.terminaut/state.json"
+fi
 
 # Preserve existing todos and current_tool from state file
 existing_todos="[]"
 existing_tool="null"
-if [ -f "$HOME/.terminaut/state.json" ] && [ "$HAS_JQ" -eq 1 ]; then
-  existing_todos=$(jq -c '.todos // []' "$HOME/.terminaut/state.json" 2>/dev/null || echo "[]")
-  existing_tool=$(jq -r '.current_tool // null' "$HOME/.terminaut/state.json" 2>/dev/null || echo "null")
+if [ -f "$STATE_FILE" ] && [ "$HAS_JQ" -eq 1 ]; then
+  existing_todos=$(jq -c '.todos // []' "$STATE_FILE" 2>/dev/null || echo "[]")
+  existing_tool=$(jq -r '.current_tool // null' "$STATE_FILE" 2>/dev/null || echo "null")
   [ "$existing_tool" = "null" ] || existing_tool="\"$existing_tool\""
 fi
 
-cat > "$HOME/.terminaut/state.json" <<EOF
+cat > "$STATE_FILE" <<EOF
 {
   "cwd": "$current_dir",
+  "git_repo_name": "${git_repo_name:-}",
   "git_branch": "$git_branch",
   "model": "$model_name",
   "context_pct": $context_pct_num,
@@ -408,7 +417,7 @@ cat > "$HOME/.terminaut/state.json" <<EOF
   "quota_resets_at": "${quota_resets_at:-}",
   "current_tool": $existing_tool,
   "uncommitted": ${git_uncommitted:-0},
-  "ahead_master": ${git_ahead_master:-0},
+  "ahead_main": ${git_ahead_main:-0},
   "open_prs": ${git_open_prs:-0},
   "pr_list": ${git_pr_list:-[]},
   "cc_version": "${cc_version:-}",
@@ -418,17 +427,39 @@ cat > "$HOME/.terminaut/state.json" <<EOF
 }
 EOF
 
-# ---- Auto-launch Terminaut panel if not running ----
-if ! pgrep -f "control_panel.py" >/dev/null 2>&1; then
-  # Check if we're in Kitty terminal
-  if [ -n "$KITTY_WINDOW_ID" ]; then
-    # Launch panel in side split
-    (
-      kitten @ goto-layout tall 2>/dev/null
-      kitten @ launch --location=vsplit --title=Terminaut ~/.terminaut/venv/bin/python ~/.terminaut/control_panel.py 2>/dev/null
-      sleep 0.3
-      kitten @ action layout_action bias 67 2>/dev/null
-    ) &
+# ---- Auto-launch Terminaut panel if not running in this Kitty tab ----
+if [ -n "$KITTY_WINDOW_ID" ] && [ "$HAS_JQ" -eq 1 ]; then
+  # Check if Terminaut window exists in the CURRENT TAB (not globally)
+  terminaut_in_tab=$(kitten @ ls 2>/dev/null | jq --arg wid "$KITTY_WINDOW_ID" '
+    [.[].tabs[] | select(.windows[] | .id == ($wid | tonumber)) | .windows[] | select(.title == "Terminaut")] | length
+  ' 2>/dev/null)
+
+  if [ "${terminaut_in_tab:-0}" -eq 0 ]; then
+    # Use short-lived marker to prevent race conditions during launch
+    LAUNCH_MARKER="$HOME/.terminaut/states/launching-${KITTY_WINDOW_ID}"
+
+    # Only launch if marker doesn't exist or is older than 10 seconds
+    should_launch=1
+    if [ -f "$LAUNCH_MARKER" ]; then
+      marker_age=$(($(date +%s) - $(stat -f %m "$LAUNCH_MARKER" 2>/dev/null || stat -c %Y "$LAUNCH_MARKER" 2>/dev/null || echo 0)))
+      [ "$marker_age" -lt 10 ] && should_launch=0
+    fi
+
+    if [ "$should_launch" -eq 1 ]; then
+      touch "$LAUNCH_MARKER"
+
+      # Launch panel in side split with per-tab state file
+      (
+        kitten @ goto-layout tall >/dev/null 2>&1
+        kitten @ launch --location=vsplit --title=Terminaut ~/.terminaut/venv/bin/python ~/.terminaut/control_panel.py "$STATE_FILE" >/dev/null 2>&1
+        sleep 0.5
+        # Focus main window (first window, index 0) then apply bias
+        kitten @ focus-window --match num:0 >/dev/null 2>&1
+        sleep 0.5
+        kitten @ action layout_action bias 67 >/dev/null 2>&1
+        rm -f "$LAUNCH_MARKER" 2>/dev/null
+      ) >/dev/null 2>&1 &
+    fi
   fi
 fi
 

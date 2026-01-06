@@ -2,6 +2,7 @@
 """Terminaut Control Panel - Robot mission control for Claude Code."""
 
 import json
+import sys
 import time
 from pathlib import Path
 from datetime import datetime, timezone
@@ -15,7 +16,8 @@ from rich.text import Text
 from rich.progress import Progress, BarColumn, TextColumn
 from rich.style import Style
 
-STATE_FILE = Path.home() / ".terminaut" / "state.json"
+# State file can be passed as argument for per-tab support
+DEFAULT_STATE_FILE = Path.home() / ".terminaut" / "state.json"
 ACTIVITY_LOG_FILE = Path.home() / ".terminaut" / "activity.jsonl"
 
 # Colors
@@ -27,11 +29,11 @@ MAGENTA = "magenta"
 DIM = "dim"
 
 
-def load_state() -> dict:
+def load_state(state_file: Path) -> dict:
     """Load state from file."""
     try:
-        if STATE_FILE.exists():
-            return json.loads(STATE_FILE.read_text())
+        if state_file.exists():
+            return json.loads(state_file.read_text())
     except Exception:
         pass
     return {}
@@ -169,14 +171,17 @@ def make_vitals(state: dict) -> Panel:
 
 
 def make_status(state: dict) -> Panel:
-    """Create status panel with model and version."""
+    """Create status panel with model, version, and path."""
     model = state.get("model", "")
     cc_version = state.get("cc_version", "")
+    cwd = state.get("cwd", "")
 
     content = Text()
     content.append(f"  {model}\n", style="magenta")
     if cc_version:
-        content.append(f"  v{cc_version}", style="dim")
+        content.append(f"  v{cc_version}\n", style="dim")
+    if cwd:
+        content.append(f"  {cwd}", style="cyan")
 
     return Panel(
         content,
@@ -189,7 +194,7 @@ def make_git_stats(state: dict) -> Panel:
     """Create git stats panel."""
     git_branch = state.get("git_branch", "")
     uncommitted = state.get("uncommitted", 0) or 0
-    ahead_master = state.get("ahead_master", 0) or 0
+    ahead_main = state.get("ahead_main", 0) or 0
     pr_list = state.get("pr_list", []) or []
 
     content = Text()
@@ -202,9 +207,9 @@ def make_git_stats(state: dict) -> Panel:
     style = "yellow" if uncommitted > 0 else "dim"
     content.append(f"  {uncommitted} uncommitted\n", style=style)
 
-    # Ahead of master
-    style = "yellow" if ahead_master > 0 else "dim"
-    content.append(f"  +{ahead_master} vs master\n", style=style)
+    # Ahead of main
+    style = "yellow" if ahead_main > 0 else "dim"
+    content.append(f"  +{ahead_main} vs main\n", style=style)
 
     # PRs section
     content.append("\n  PRs:\n", style="bright_blue")
@@ -278,9 +283,11 @@ def make_controls() -> Panel:
 
 
 def make_header(state: dict) -> Text:
-    """Create the header with project name."""
-    cwd = state.get("cwd", "~")
-    project_name = cwd.split("/")[-1] if "/" in cwd else cwd
+    """Create the header with git project name."""
+    project_name = state.get("git_repo_name", "")
+    if not project_name:
+        cwd = state.get("cwd", "~")
+        project_name = cwd.split("/")[-1] if "/" in cwd else cwd
     header = Text(project_name, style="bold bright_magenta", justify="center")
     return header
 
@@ -296,7 +303,7 @@ def build_layout(state: dict, activities: list) -> Layout:
     )
 
     layout["main"].split_column(
-        Layout(name="status", size=4),
+        Layout(name="status", size=5),
         Layout(name="vitals", size=5),
         Layout(name="git", size=12),
         Layout(name="plan"),
@@ -314,13 +321,19 @@ def build_layout(state: dict, activities: list) -> Layout:
 
 def main():
     """Main loop - watch state and update display."""
+    # Get state file from command line argument or use default
+    if len(sys.argv) > 1:
+        state_file = Path(sys.argv[1])
+    else:
+        state_file = DEFAULT_STATE_FILE
+
     console = Console()
 
     with Live(console=console, refresh_per_second=10, screen=True) as live:
         while True:
             try:
                 # Always refresh - state changes fast during tool execution
-                state = load_state()
+                state = load_state(state_file)
                 layout = build_layout(state, [])
                 live.update(layout)
 

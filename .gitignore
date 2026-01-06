@@ -3,6 +3,7 @@ venv/
 
 # Runtime state
 state.json
+states/
 activity.jsonl
 debug.log
 
