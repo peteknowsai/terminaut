@@ -135,6 +135,7 @@ git_pr_list="[]"
 
 if git rev-parse --git-dir >/dev/null 2>&1; then
   git_branch=$(git branch --show-current 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+  git_repo_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "")
 
   # Get uncommitted changes count (staged + unstaged + untracked)
   git_uncommitted=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
@@ -408,6 +409,7 @@ fi
 cat > "$STATE_FILE" <<EOF
 {
   "cwd": "$current_dir",
+  "git_repo_name": "${git_repo_name:-}",
   "git_branch": "$git_branch",
   "model": "$model_name",
   "context_pct": $context_pct_num,

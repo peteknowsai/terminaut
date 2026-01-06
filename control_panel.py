@@ -283,9 +283,11 @@ def make_controls() -> Panel:
 
 
 def make_header(state: dict) -> Text:
-    """Create the header with project name."""
-    cwd = state.get("cwd", "~")
-    project_name = cwd.split("/")[-1] if "/" in cwd else cwd
+    """Create the header with git project name."""
+    project_name = state.get("git_repo_name", "")
+    if not project_name:
+        cwd = state.get("cwd", "~")
+        project_name = cwd.split("/")[-1] if "/" in cwd else cwd
     header = Text(project_name, style="bold bright_magenta", justify="center")
     return header
 
