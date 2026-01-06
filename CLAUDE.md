@@ -85,3 +85,4 @@ The panel auto-refreshes from state.json. To test:
 - `hooks/pre-tool.sh` - PreToolUse hook (tracks current tool)
 - `hooks/post-tool.sh` - PostToolUse hook (captures todos)
 - `state.json` - Runtime state (gitignored)
+- `launch.sh` - Kitty launcher with 24pt font
