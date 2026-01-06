@@ -387,18 +387,25 @@ fi
 # All output suppressed, only state file is written
 
 # ---- Write state for Terminaut/Kitty tab bar ----
-mkdir -p "$HOME/.terminaut"
+mkdir -p "$HOME/.terminaut/states"
+
+# Use KITTY_WINDOW_ID for per-tab state, fallback to shared state
+if [ -n "$KITTY_WINDOW_ID" ]; then
+  STATE_FILE="$HOME/.terminaut/states/state-${KITTY_WINDOW_ID}.json"
+else
+  STATE_FILE="$HOME/.terminaut/state.json"
+fi
 
 # Preserve existing todos and current_tool from state file
 existing_todos="[]"
 existing_tool="null"
-if [ -f "$HOME/.terminaut/state.json" ] && [ "$HAS_JQ" -eq 1 ]; then
-  existing_todos=$(jq -c '.todos // []' "$HOME/.terminaut/state.json" 2>/dev/null || echo "[]")
-  existing_tool=$(jq -r '.current_tool // null' "$HOME/.terminaut/state.json" 2>/dev/null || echo "null")
+if [ -f "$STATE_FILE" ] && [ "$HAS_JQ" -eq 1 ]; then
+  existing_todos=$(jq -c '.todos // []' "$STATE_FILE" 2>/dev/null || echo "[]")
+  existing_tool=$(jq -r '.current_tool // null' "$STATE_FILE" 2>/dev/null || echo "null")
   [ "$existing_tool" = "null" ] || existing_tool="\"$existing_tool\""
 fi
 
-cat > "$HOME/.terminaut/state.json" <<EOF
+cat > "$STATE_FILE" <<EOF
 {
   "cwd": "$current_dir",
   "git_branch": "$git_branch",
@@ -418,23 +425,39 @@ cat > "$HOME/.terminaut/state.json" <<EOF
 }
 EOF
 
-# ---- Auto-launch Terminaut panel if not running in this Kitty instance ----
-if [ -n "$KITTY_WINDOW_ID" ]; then
-  # Check if Terminaut window exists in current Kitty instance
-  has_terminaut=$(kitten @ ls 2>/dev/null | grep -c '"title": "Terminaut"' || echo "0")
-  if [ "$has_terminaut" -eq 0 ]; then
-    # Launch panel in side split
-    (
-      kitten @ goto-layout tall >/dev/null 2>&1
-      kitten @ launch --location=vsplit --title=Terminaut ~/.terminaut/venv/bin/python ~/.terminaut/control_panel.py >/dev/null 2>&1
-      # Apply bias multiple times to ensure it sticks
-      sleep 0.5
-      kitten @ action layout_action bias 67 >/dev/null 2>&1
-      sleep 0.5
-      kitten @ action layout_action bias 67 >/dev/null 2>&1
-      sleep 0.5
-      kitten @ action layout_action bias 67 >/dev/null 2>&1
-    ) >/dev/null 2>&1 &
+# ---- Auto-launch Terminaut panel if not running in this Kitty tab ----
+if [ -n "$KITTY_WINDOW_ID" ] && [ "$HAS_JQ" -eq 1 ]; then
+  # Check if Terminaut window exists in the CURRENT TAB (not globally)
+  terminaut_in_tab=$(kitten @ ls 2>/dev/null | jq --arg wid "$KITTY_WINDOW_ID" '
+    [.[].tabs[] | select(.windows[] | .id == ($wid | tonumber)) | .windows[] | select(.title == "Terminaut")] | length
+  ' 2>/dev/null)
+
+  if [ "${terminaut_in_tab:-0}" -eq 0 ]; then
+    # Use short-lived marker to prevent race conditions during launch
+    LAUNCH_MARKER="$HOME/.terminaut/states/launching-${KITTY_WINDOW_ID}"
+
+    # Only launch if marker doesn't exist or is older than 10 seconds
+    should_launch=1
+    if [ -f "$LAUNCH_MARKER" ]; then
+      marker_age=$(($(date +%s) - $(stat -f %m "$LAUNCH_MARKER" 2>/dev/null || stat -c %Y "$LAUNCH_MARKER" 2>/dev/null || echo 0)))
+      [ "$marker_age" -lt 10 ] && should_launch=0
+    fi
+
+    if [ "$should_launch" -eq 1 ]; then
+      touch "$LAUNCH_MARKER"
+
+      # Launch panel in side split with per-tab state file
+      (
+        kitten @ goto-layout tall >/dev/null 2>&1
+        kitten @ launch --location=vsplit --title=Terminaut ~/.terminaut/venv/bin/python ~/.terminaut/control_panel.py "$STATE_FILE" >/dev/null 2>&1
+        sleep 0.5
+        # Focus main window (first window, index 0) then apply bias
+        kitten @ focus-window --match num:0 >/dev/null 2>&1
+        sleep 0.5
+        kitten @ action layout_action bias 67 >/dev/null 2>&1
+        rm -f "$LAUNCH_MARKER" 2>/dev/null
+      ) >/dev/null 2>&1 &
+    fi
   fi
 fi
 

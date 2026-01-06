@@ -2,6 +2,7 @@
 """Terminaut Control Panel - Robot mission control for Claude Code."""
 
 import json
+import sys
 import time
 from pathlib import Path
 from datetime import datetime, timezone
@@ -15,7 +16,8 @@ from rich.text import Text
 from rich.progress import Progress, BarColumn, TextColumn
 from rich.style import Style
 
-STATE_FILE = Path.home() / ".terminaut" / "state.json"
+# State file can be passed as argument for per-tab support
+DEFAULT_STATE_FILE = Path.home() / ".terminaut" / "state.json"
 ACTIVITY_LOG_FILE = Path.home() / ".terminaut" / "activity.jsonl"
 
 # Colors
@@ -27,11 +29,11 @@ MAGENTA = "magenta"
 DIM = "dim"
 
 
-def load_state() -> dict:
+def load_state(state_file: Path) -> dict:
     """Load state from file."""
     try:
-        if STATE_FILE.exists():
-            return json.loads(STATE_FILE.read_text())
+        if state_file.exists():
+            return json.loads(state_file.read_text())
     except Exception:
         pass
     return {}
@@ -317,13 +319,19 @@ def build_layout(state: dict, activities: list) -> Layout:
 
 def main():
     """Main loop - watch state and update display."""
+    # Get state file from command line argument or use default
+    if len(sys.argv) > 1:
+        state_file = Path(sys.argv[1])
+    else:
+        state_file = DEFAULT_STATE_FILE
+
     console = Console()
 
     with Live(console=console, refresh_per_second=10, screen=True) as live:
         while True:
             try:
                 # Always refresh - state changes fast during tool execution
-                state = load_state()
+                state = load_state(state_file)
                 layout = build_layout(state, [])
                 live.update(layout)
 
