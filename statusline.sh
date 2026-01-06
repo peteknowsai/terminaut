@@ -129,7 +129,7 @@ rst() { if [ "$use_color" -eq 1 ]; then printf '\033[0m'; fi; }
 git_branch=""
 git_uncommitted=0
 git_ahead_dev=0
-git_ahead_master=0
+git_ahead_main=0
 git_open_prs="0"
 git_pr_list="[]"
 
@@ -145,9 +145,9 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     git_ahead_dev=$(git rev-list dev..HEAD --count 2>/dev/null || echo 0)
   fi
 
-  # Get commits ahead of master branch (if master exists and we're not on it)
-  if [ "$git_branch" != "master" ] && git rev-parse --verify master >/dev/null 2>&1; then
-    git_ahead_master=$(git rev-list master..HEAD --count 2>/dev/null || echo 0)
+  # Get commits ahead of main branch (if main exists and we're not on it)
+  if [ "$git_branch" != "main" ] && git rev-parse --verify main >/dev/null 2>&1; then
+    git_ahead_main=$(git rev-list main..HEAD --count 2>/dev/null || echo 0)
   fi
 
   # Get open PRs for this repo (with 2 second timeout, cached for 60s)
@@ -417,7 +417,7 @@ cat > "$STATE_FILE" <<EOF
   "quota_resets_at": "${quota_resets_at:-}",
   "current_tool": $existing_tool,
   "uncommitted": ${git_uncommitted:-0},
-  "ahead_master": ${git_ahead_master:-0},
+  "ahead_main": ${git_ahead_main:-0},
   "open_prs": ${git_open_prs:-0},
   "pr_list": ${git_pr_list:-[]},
   "cc_version": "${cc_version:-}",

@@ -194,7 +194,7 @@ def make_git_stats(state: dict) -> Panel:
     """Create git stats panel."""
     git_branch = state.get("git_branch", "")
     uncommitted = state.get("uncommitted", 0) or 0
-    ahead_master = state.get("ahead_master", 0) or 0
+    ahead_main = state.get("ahead_main", 0) or 0
     pr_list = state.get("pr_list", []) or []
 
     content = Text()
@@ -207,9 +207,9 @@ def make_git_stats(state: dict) -> Panel:
     style = "yellow" if uncommitted > 0 else "dim"
     content.append(f"  {uncommitted} uncommitted\n", style=style)
 
-    # Ahead of master
-    style = "yellow" if ahead_master > 0 else "dim"
-    content.append(f"  +{ahead_master} vs master\n", style=style)
+    # Ahead of main
+    style = "yellow" if ahead_main > 0 else "dim"
+    content.append(f"  +{ahead_main} vs main\n", style=style)
 
     # PRs section
     content.append("\n  PRs:\n", style="bright_blue")
