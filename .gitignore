@@ -1,0 +1,10 @@
+# Virtual environment
+venv/
+
+# Runtime state
+state.json
+activity.jsonl
+debug.log
+
+# macOS
+.DS_Store

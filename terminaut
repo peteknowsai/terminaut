@@ -1,0 +1,15 @@
+#!/bin/bash
+# Terminaut - Launch Claude Code with control panel
+# Usage: terminaut [claude args...]
+
+TERMINAUT_DIR="$HOME/.terminaut"
+
+# Use Kitty remote control to create the split and run control panel
+kitten @ launch --location=vsplit --title="Terminaut" --keep-focus \
+    "$TERMINAUT_DIR/venv/bin/python" "$TERMINAUT_DIR/control_panel.py"
+
+# Resize to make current window (claude) larger - 75%
+kitten @ resize-window --axis=horizontal --increment=-20
+
+# Run Claude Code in the current pane
+exec claude "$@"
