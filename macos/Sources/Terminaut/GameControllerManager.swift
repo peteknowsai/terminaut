@@ -26,6 +26,9 @@ class GameControllerManager: ObservableObject {
     /// Vim mode active state
     @Published var vimModeActive: Bool = false
 
+    /// Select mode active (right stick sends Shift+Arrow for text selection)
+    @Published var selectModeActive: Bool = false
+
     /// Is a controller currently connected?
     var isConnected: Bool { connectedController != nil }
 
@@ -45,7 +48,8 @@ class GameControllerManager: ObservableObject {
         case select = "Select" // Return to launcher
         case leftPaddle = "L4" // Shift-Tab
         case rightPaddle = "R4" // Escape
-        case rightStickClick = "R3" // Toggle vim mode
+        case leftStickClick = "L3" // Vim mode ON
+        case rightStickClick = "R3" // Vim mode OFF
     }
 
     enum ControllerDirection: String {
@@ -183,9 +187,21 @@ class GameControllerManager: ObservableObject {
             self?.handleRightThumbstick(y: yValue)
         }
 
-        // Right stick click (R3) - Toggle vim mode
+        // Left stick click (L3) - Vim mode ON (program P1 paddle to L3)
+        gamepad.leftThumbstickButton?.pressedChangedHandler = { [weak self] _, _, pressed in
+            if pressed {
+                self?.setVimMode(true)
+                self?.handleButton(.leftStickClick)
+            }
+        }
+
+        // Right stick click (R3) - Toggle select mode for text selection/copying
         gamepad.rightThumbstickButton?.pressedChangedHandler = { [weak self] _, _, pressed in
-            if pressed { self?.toggleVimMode() }
+            if pressed {
+                print("🎮 R3 clicked!")
+                self?.toggleSelectMode()
+                self?.handleButton(.rightStickClick)
+            }
         }
 
         // Left trigger (L2) - Left paddle action (Shift-Tab)
@@ -207,10 +223,25 @@ class GameControllerManager: ObservableObject {
 
     // MARK: - Vim Mode
 
-    private func toggleVimMode() {
+    private func setVimMode(_ active: Bool) {
         DispatchQueue.main.async {
-            self.vimModeActive.toggle()
-            print("🎮 Vim mode: \(self.vimModeActive ? "ON" : "OFF")")
+            guard self.vimModeActive != active else { return }
+            self.vimModeActive = active
+            print("🎮 Vim mode: \(active ? "ON" : "OFF")")
+        }
+    }
+
+    // MARK: - Select Mode (for text selection/copying)
+
+    private func toggleSelectMode() {
+        DispatchQueue.main.async {
+            self.selectModeActive.toggle()
+            print("🎮 Select mode: \(self.selectModeActive ? "ON" : "OFF")")
+
+            // Stop scrolling when entering/exiting select mode
+            if self.selectModeActive {
+                self.stopScrolling()
+            }
         }
     }
 
@@ -221,10 +252,28 @@ class GameControllerManager: ObservableObject {
     private func handleRightThumbstick(y: Float) {
         // Apply deadzone
         if abs(y) < scrollDeadzone {
-            stopScrolling()
+            if !selectModeActive {
+                stopScrolling()
+            }
+            selectModeLastDirection = nil
             return
         }
 
+        // Select mode: send Shift+Arrow keys for text selection
+        if selectModeActive {
+            let direction: ControllerDirection = y > 0 ? .up : .down
+            print("🎮 Right stick in SELECT mode: y=\(y), direction=\(direction)")
+            // Only fire on direction change to avoid key repeat flood
+            if direction != selectModeLastDirection {
+                selectModeLastDirection = direction
+                sendSelectModeArrow(direction: direction)
+            }
+            return
+        }
+
+        print("🎮 Right stick in SCROLL mode: y=\(y)")
+
+        // Scroll mode (default): scroll terminal
         // Invert: stick up (positive y) = scroll up (see earlier content)
         let scrollDirection = -y
 
@@ -233,6 +282,31 @@ class GameControllerManager: ObservableObject {
         }
 
         startScrolling(direction: scrollDirection)
+    }
+
+    private var selectModeLastDirection: ControllerDirection?
+
+    /// Send Shift+Arrow key for text selection in select mode
+    private func sendSelectModeArrow(direction: ControllerDirection) {
+        let keyCode: CGKeyCode
+        switch direction {
+        case .up: keyCode = 126
+        case .down: keyCode = 125
+        case .left: keyCode = 123
+        case .right: keyCode = 124
+        }
+
+        // Create Shift+Arrow key event
+        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
+            return
+        }
+
+        keyDown.flags = .maskShift
+        keyUp.flags = .maskShift
+
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
     }
 
     private func startScrolling(direction: Float) {
@@ -262,7 +336,9 @@ class GameControllerManager: ObservableObject {
     private func sendScrollEvent(direction: Float) {
         // Create scroll wheel event
         // Positive direction = scroll up (content moves down), negative = scroll down
-        let scrollAmount = Int32(direction * 1.5)  // 1.5 lines per tick (was 3)
+        // Use at least 1 line, scaled by direction magnitude
+        let sign: Float = direction > 0 ? 1 : -1
+        let scrollAmount = Int32(sign * max(1, abs(direction) * 2))  // 1-2 lines per tick
 
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: scrollAmount, wheel2: 0, wheel3: 0) else {
             return
@@ -350,6 +426,7 @@ class GameControllerManager: ObservableObject {
         if direction != lastThumbstickDirection {
             lastThumbstickDirection = direction
             if let dir = direction {
+                print("🎮 LEFT thumbstick direction: \(dir)")
                 handleDirection(dir)
             }
         }

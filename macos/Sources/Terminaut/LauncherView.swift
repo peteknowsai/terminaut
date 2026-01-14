@@ -320,7 +320,7 @@ struct LauncherView: View {
                 case .select:
                     // Select = Options (return to launcher if in session)
                     TerminautCoordinator.shared.returnToLauncher()
-                case .leftPaddle, .rightPaddle, .rightStickClick:
+                case .leftPaddle, .rightPaddle, .leftStickClick, .rightStickClick:
                     // Handled by coordinator
                     break
                 }

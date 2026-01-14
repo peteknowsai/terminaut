@@ -89,7 +89,14 @@ class TerminautCoordinator: ObservableObject {
             }
             return
         case .rightStickClick:
-            // R3 = Toggle vim mode (handled in GameControllerManager)
+            // R3 = Toggle select mode (handled in GameControllerManager)
+            // Don't send any key - just used for mode toggle
+            return
+        case .leftStickClick:
+            // L3 = Insert mode (i) - get back to typing
+            if !showLauncher {
+                simulateText("i")
+            }
             return
         case .select:
             // Select = Return to launcher (like Cmd+L)
@@ -107,58 +114,82 @@ class TerminautCoordinator: ObservableObject {
             break
         }
 
-        // Vim mode button mappings (when in session)
-        if vimMode && !showLauncher {
+        // Session button mappings (no vim mode gating - user knows when they're in vim)
+        if !showLauncher {
             switch button {
             case .a:
-                simulateKey(keyCode: 36) // Enter
+                if controllerManager.selectModeActive {
+                    simulateCopy() // Cmd+C in select mode
+                    // Exit select mode after copying
+                    DispatchQueue.main.async {
+                        self.controllerManager.selectModeActive = false
+                        print("🎮 Select mode: OFF (copied)")
+                    }
+                } else {
+                    simulateKey(keyCode: 36) // Enter
+                }
             case .b:
-                // B in vim mode = 'i' (insert mode) + exit vim mode
-                simulateText("i")
-                controllerManager.vimModeActive = false
-                print("🎮 Vim mode: OFF (pressed B for insert)")
+                simulateKey(keyCode: 53) // Escape
             case .x:
-                simulateText("dd") // Delete line
+                simulateText("dd") // Delete line (vim)
             case .y:
-                simulateText("yy") // Yank line
+                simulateText("yy") // Yank line (vim)
             default:
                 break
             }
-            return
+        }
+    }
+
+    /// Simulate Cmd+C for copying
+    private func simulateCopy() {
+        guard let window = NSApp.keyWindow else { return }
+
+        // Create Cmd+C key event
+        if let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "c",
+            charactersIgnoringModifiers: "c",
+            isARepeat: false,
+            keyCode: 8 // C key code
+        ) {
+            window.sendEvent(event)
         }
 
-        // Normal mode button mappings
-        switch button {
-        case .a:
-            if !showLauncher {
-                simulateKey(keyCode: 36) // Enter
-            }
-        case .b:
-            // B = Escape (enter vim mode in Claude Code) + enable vim mode
-            if !showLauncher {
-                simulateKey(keyCode: 53) // Escape
-                controllerManager.vimModeActive = true
-                print("🎮 Vim mode: ON (pressed B for Escape)")
-            }
-        default:
-            // Other buttons handled by LauncherView
-            break
+        if let event = NSEvent.keyEvent(
+            with: .keyUp,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "c",
+            charactersIgnoringModifiers: "c",
+            isARepeat: false,
+            keyCode: 8
+        ) {
+            window.sendEvent(event)
         }
     }
 
     private func handleControllerDirection(_ direction: GameControllerManager.ControllerDirection) {
-        // Only handle directions in vim mode when in a session
-        guard controllerManager.vimModeActive && !showLauncher else { return }
+        // Don't handle directions in launcher (LauncherView handles its own navigation)
+        guard !showLauncher else { return }
 
+        // Always send arrow keys for menu/list navigation
         switch direction {
         case .up:
-            simulateText("k") // Move up
+            simulateKey(keyCode: 126) // Up arrow
         case .down:
-            simulateText("j") // Move down
+            simulateKey(keyCode: 125) // Down arrow
         case .left:
-            simulateText("b") // Back word
+            simulateKey(keyCode: 123) // Left arrow
         case .right:
-            simulateText("w") // Forward word
+            simulateKey(keyCode: 124) // Right arrow
         }
     }
 
@@ -199,17 +230,9 @@ class TerminautCoordinator: ObservableObject {
 
     /// Simulate a key press - sends directly to terminal surface
     private func simulateKey(keyCode: CGKeyCode) {
-        // Get the current terminal surface view
-        guard selectedSessionIndex < activeSessions.count,
-              let surfaceView = activeSessions[selectedSessionIndex].surfaceView else {
-            return
-        }
+        guard let window = NSApp.keyWindow else { return }
 
-        // Get the AppKit view from the SwiftUI wrapper
-        guard let window = NSApp.keyWindow,
-              let contentView = window.contentView else {
-            return
-        }
+        let characters = characterForKeyCode(keyCode)
 
         // Create NSEvent for key down
         if let event = NSEvent.keyEvent(
@@ -219,12 +242,11 @@ class TerminautCoordinator: ObservableObject {
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber,
             context: nil,
-            characters: keyCode == 36 ? "\r" : "\u{1B}",  // Return or Escape
-            charactersIgnoringModifiers: keyCode == 36 ? "\r" : "\u{1B}",
+            characters: characters,
+            charactersIgnoringModifiers: characters,
             isARepeat: false,
             keyCode: UInt16(keyCode)
         ) {
-            // Send to the first responder (should be terminal)
             window.sendEvent(event)
         }
 
@@ -236,12 +258,25 @@ class TerminautCoordinator: ObservableObject {
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber,
             context: nil,
-            characters: keyCode == 36 ? "\r" : "\u{1B}",
-            charactersIgnoringModifiers: keyCode == 36 ? "\r" : "\u{1B}",
+            characters: characters,
+            charactersIgnoringModifiers: characters,
             isARepeat: false,
             keyCode: UInt16(keyCode)
         ) {
             window.sendEvent(event)
+        }
+    }
+
+    /// Get the character string for a key code
+    private func characterForKeyCode(_ keyCode: CGKeyCode) -> String {
+        switch keyCode {
+        case 36: return "\r"           // Return
+        case 53: return "\u{1B}"       // Escape
+        case 123: return "\u{F702}"    // Left arrow
+        case 124: return "\u{F703}"    // Right arrow
+        case 125: return "\u{F701}"    // Down arrow
+        case 126: return "\u{F700}"    // Up arrow
+        default: return ""
         }
     }
 
