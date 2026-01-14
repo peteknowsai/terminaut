@@ -18,18 +18,29 @@ struct LauncherView: View {
         Set(activeProjectIdsOrdered)
     }
 
-    /// Projects sorted with active sessions at top, in activation order
+    /// Projects sorted: active sessions first (in tab order), then recently opened, then alphabetical
     private var sortedProjects: [Project] {
         let projects = projectStore.projects
         let projectsById = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
 
-        // Active projects in activation order
+        // Active projects in activation order (first tab first)
         let active = activeProjectIdsOrdered.compactMap { projectsById[$0] }
+        let activeIds = Set(activeProjectIdsOrdered)
 
-        // Inactive projects in original order
-        let inactive = projects.filter { !activeProjectIds.contains($0.id) }
+        // Inactive projects: split into recently opened and never opened
+        let inactive = projects.filter { !activeIds.contains($0.id) }
 
-        return active + inactive
+        // Recently opened (sorted by lastOpened desc)
+        let recentlyOpened = inactive
+            .filter { $0.lastOpened != nil }
+            .sorted { ($0.lastOpened ?? .distantPast) > ($1.lastOpened ?? .distantPast) }
+
+        // Never opened (sorted alphabetically)
+        let neverOpened = inactive
+            .filter { $0.lastOpened == nil }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        return active + recentlyOpened + neverOpened
     }
 
     private var filteredProjects: [Project] {
@@ -343,11 +354,15 @@ struct ProjectTile: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
 
-            // Active label
+            // Status label: ACTIVE or last opened time
             if isActive {
                 Text("ACTIVE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundColor(.green)
+            } else if let lastOpened = project.lastOpened {
+                Text(formatLastOpened(lastOpened))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray)
             }
         }
         .frame(width: 180, height: 160)
@@ -384,6 +399,35 @@ struct ProjectTile: View {
     private var tileBackgroundColor: Color {
         if isActive { return Color.green.opacity(0.05) }
         return Color.white.opacity(0.05)
+    }
+
+    private func formatLastOpened(_ date: Date) -> String {
+        let now = Date()
+        let interval = now.timeIntervalSince(date)
+
+        if interval < 60 {
+            return "Just now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes) min ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
+        } else if interval < 172800 {
+            return "Yesterday"
+        } else if interval < 604800 {
+            let days = Int(interval / 86400)
+            return "\(days) days ago"
+        } else {
+            let formatter = DateFormatter()
+            let calendar = Calendar.current
+            if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+                formatter.dateFormat = "MMM d"
+            } else {
+                formatter.dateFormat = "MMM d, yyyy"
+            }
+            return formatter.string(from: date)
+        }
     }
 }
 
