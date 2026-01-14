@@ -174,3 +174,7 @@ if TerminalController.all.isEmpty && derivedConfig.initialWindow {
 - **Bundle ID**: `com.peteknowsai.terminaut`
 - **Display Name**: Terminaut
 - Designed to coexist with regular Ghostty installation
+
+## Contributing
+
+Contributions are welcome! Please open a PR with your changes.
