@@ -19,6 +19,9 @@ class TerminautCoordinator: ObservableObject {
     /// Currently selected session index (for tabs)
     @Published var selectedSessionIndex: Int = 0
 
+    /// Active project IDs in activation order (first tab open = first in array)
+    @Published var activeProjectIdsOrdered: [UUID] = []
+
     /// Reference to ghostty app for creating surfaces
     weak var ghosttyApp: Ghostty.App?
 
@@ -68,6 +71,11 @@ class TerminautCoordinator: ObservableObject {
             activeSessions.append(session)
             selectedSessionIndex = activeSessions.count - 1
             activeProject = project
+
+            // Track activation order for launcher display
+            if !activeProjectIdsOrdered.contains(project.id) {
+                activeProjectIdsOrdered.append(project.id)
+            }
         }
 
         showLauncher = false
@@ -91,7 +99,11 @@ class TerminautCoordinator: ObservableObject {
             return
         }
 
+        let closedProject = activeSessions[index].project
         activeSessions.remove(at: index)
+
+        // Remove from activation order when session closes
+        activeProjectIdsOrdered.removeAll { $0 == closedProject.id }
 
         // Always return to launcher when closing a session
         if activeSessions.isEmpty {

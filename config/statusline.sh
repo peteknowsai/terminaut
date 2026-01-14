@@ -232,19 +232,67 @@ if [ "$HAS_JQ" -eq 1 ]; then
 
   # Extract background tasks from JSONL transcript
   background_tasks="[]"
+  TASK_NAMES_FILE="$HOME/.terminaut/task-names.json"
+
+  # Ensure task names cache file exists
+  if [ ! -f "$TASK_NAMES_FILE" ]; then
+    echo '{}' > "$TASK_NAMES_FILE"
+  fi
+
   if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    # Load archived task IDs (if file exists)
+    archived_tasks=""
+    if [ -f "$HOME/.terminaut/tasks.json" ]; then
+      archived_tasks=$(jq -r '.archived[]? // empty' "$HOME/.terminaut/tasks.json" 2>/dev/null | tr '\n' '|')
+    fi
+
+    # Load cached task names
+    cached_names=$(cat "$TASK_NAMES_FILE" 2>/dev/null || echo '{}')
+
     # Extract session IDs from background-task-output blocks
+    # Note: Real session IDs are like session_01XyZ123... (start with 01, 20+ chars total)
     background_tasks=$(grep -o '<background-task-output>[^<]*</background-task-output>' "$transcript_path" 2>/dev/null | \
       sed 's/<[^>]*>//g' | \
       while read -r output; do
-        session_id=$(echo "$output" | grep -oE 'session_[a-zA-Z0-9]+' | head -1)
+        # Match real session IDs (session_01 followed by 20+ alphanumeric chars)
+        session_id=$(echo "$output" | grep -oE 'session_01[a-zA-Z0-9]{20,}' | head -1)
         if [ -n "$session_id" ]; then
+          # Skip if archived
+          if [ -n "$archived_tasks" ] && echo "$archived_tasks" | grep -q "$session_id"; then
+            continue
+          fi
           web_url="https://claude.ai/code/$session_id"
-          # Get corresponding input (description) - look for preceding background-task-input
-          desc=$(grep -B10 "$session_id" "$transcript_path" 2>/dev/null | grep -o '<background-task-input>[^<]*</background-task-input>' | tail -1 | sed 's/<[^>]*>//g')
-          [ -z "$desc" ] && desc="Background task"
-          # Escape description for JSON
-          desc_escaped=$(echo "$desc" | sed 's/"/\\"/g' | tr -d '\n')
+
+          # Check for cached smart name
+          cached_name=$(echo "$cached_names" | jq -r --arg id "$session_id" '.[$id] // empty' 2>/dev/null)
+
+          if [ -n "$cached_name" ] && [ "$cached_name" != "null" ]; then
+            # Use cached smart name
+            desc_escaped=$(echo "$cached_name" | sed 's/"/\\"/g' | tr -d '\n')
+          else
+            # Get full description from background-task-input
+            full_desc=$(grep -B10 "$session_id" "$transcript_path" 2>/dev/null | grep -o '<background-task-input>[^<]*</background-task-input>' | tail -1 | sed 's/<[^>]*>//g')
+            [ -z "$full_desc" ] && full_desc="Background task"
+
+            # Truncate to first 50 chars for now (Haiku will generate better name in background)
+            desc=$(echo "$full_desc" | head -c 50)
+            [ ${#full_desc} -gt 50 ] && desc="${desc}..."
+            desc_escaped=$(echo "$desc" | sed 's/"/\\"/g' | tr -d '\n')
+
+            # Spawn background process to generate smart name with Haiku (if claude is available)
+            if command -v claude >/dev/null 2>&1; then
+              (
+                # Generate smart name with Haiku - 2 lines, ~30 chars each
+                smart_name=$(echo "Summarize this task in 8-12 words max. Output ONLY the summary, no quotes or explanation: $full_desc" | claude -p --model haiku 2>/dev/null | head -1 | tr -d '"' | sed 's/^[[:space:]]*//' | head -c 70)
+                if [ -n "$smart_name" ] && [ ${#smart_name} -gt 5 ]; then
+                  # Update cache atomically
+                  tmp_file=$(mktemp)
+                  jq --arg id "$session_id" --arg name "$smart_name" '. + {($id): $name}' "$TASK_NAMES_FILE" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$TASK_NAMES_FILE"
+                fi
+              ) &
+            fi
+          fi
+
           echo "{\"sessionId\":\"$session_id\",\"description\":\"$desc_escaped\",\"webUrl\":\"$web_url\"}"
         fi
       done | jq -s 'unique_by(.sessionId)' 2>/dev/null || echo "[]")

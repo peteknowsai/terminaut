@@ -18,7 +18,7 @@ struct LauncherView: View {
         Set(activeProjectIdsOrdered)
     }
 
-    /// Projects sorted with active sessions at top, in activation order
+    /// Projects sorted with active sessions at top, then by lastOpened timestamp
     private var sortedProjects: [Project] {
         let projects = projectStore.projects
         let projectsById = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
@@ -26,8 +26,20 @@ struct LauncherView: View {
         // Active projects in activation order
         let active = activeProjectIdsOrdered.compactMap { projectsById[$0] }
 
-        // Inactive projects in original order
-        let inactive = projects.filter { !activeProjectIds.contains($0.id) }
+        // Inactive projects sorted by lastOpened (most recent first), then alphabetically
+        let inactive = projects
+            .filter { !activeProjectIds.contains($0.id) }
+            .sorted { p1, p2 in
+                // First sort by lastOpened descending (most recent first)
+                if let d1 = p1.lastOpened, let d2 = p2.lastOpened {
+                    return d1 > d2
+                }
+                // Projects with lastOpened come before those without
+                if p1.lastOpened != nil { return true }
+                if p2.lastOpened != nil { return false }
+                // Fall back to alphabetical for projects never opened
+                return p1.name.localizedCaseInsensitiveCompare(p2.name) == .orderedAscending
+            }
 
         return active + inactive
     }
@@ -299,6 +311,24 @@ struct ProjectTile: View {
     let isSelected: Bool
     var isActive: Bool = false
 
+    private var displayName: String {
+        // Remove trailing path component if it duplicates the project name
+        let pathLastComponent = (project.path as NSString).lastPathComponent
+        if project.name == pathLastComponent {
+            // Get parent directory name if available
+            let pathParent = ((project.path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+            return pathParent.isEmpty ? project.name : pathParent
+        }
+        return project.name
+    }
+
+    private var lastOpenedText: String? {
+        guard let lastOpened = project.lastOpened else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: lastOpened, relativeTo: Date())
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             // Icon area
@@ -338,16 +368,20 @@ struct ProjectTile: View {
             }
 
             // Project name
-            Text(project.name)
+            Text(displayName)
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
                 .foregroundColor(.white)
                 .lineLimit(1)
 
-            // Active label
+            // Last opened time or Active label
             if isActive {
                 Text("ACTIVE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundColor(.green)
+            } else if let lastOpenedText = lastOpenedText {
+                Text(lastOpenedText)
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundColor(.gray)
             }
         }
         .frame(width: 180, height: 160)

@@ -15,7 +15,7 @@ struct TerminautRootView: View {
             if coordinator.showLauncher {
                 LauncherView(
                     projectStore: ProjectStore.shared,
-                    activeProjectIdsOrdered: coordinator.activeSessions.map { $0.project.id }
+                    activeProjectIdsOrdered: coordinator.activeProjectIdsOrdered
                 ) { project in
                     coordinator.launchProject(project)
                 }
@@ -231,6 +231,9 @@ struct ControlPanelView: View {
                         },
                         onTeleport: { task in
                             onTeleport(task.sessionId)
+                        },
+                        onArchive: { task in
+                            TaskArchiveManager.shared.archiveTask(sessionId: task.sessionId)
                         }
                     )
                 }
@@ -424,6 +427,7 @@ struct TasksPanel: View {
     let state: SessionState
     let onOpenWeb: (SessionState.BackgroundTask) -> Void
     let onTeleport: (SessionState.BackgroundTask) -> Void
+    let onArchive: (SessionState.BackgroundTask) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -431,7 +435,7 @@ struct TasksPanel: View {
 
             if let tasks = state.backgroundTasks, !tasks.isEmpty {
                 ForEach(tasks) { task in
-                    TaskRow(task: task, onOpenWeb: onOpenWeb, onTeleport: onTeleport)
+                    TaskRow(task: task, onOpenWeb: onOpenWeb, onTeleport: onTeleport, onArchive: onArchive)
                 }
             } else {
                 Text("No background tasks")
@@ -449,22 +453,20 @@ struct TaskRow: View {
     let task: SessionState.BackgroundTask
     let onOpenWeb: (SessionState.BackgroundTask) -> Void
     let onTeleport: (SessionState.BackgroundTask) -> Void
+    let onArchive: (SessionState.BackgroundTask) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .top, spacing: 12) {
             Text(task.description)
                 .font(.system(size: 16, design: .monospaced))
                 .foregroundColor(.white)
                 .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
+            Spacer()
+
+            // Action buttons (aligned to top)
             HStack(spacing: 8) {
-                // Session ID badge
-                Text(String(task.sessionId.prefix(20)) + "...")
-                    .font(.system(size: 14, design: .monospaced))
-                    .foregroundColor(.gray)
-
-                Spacer()
-
                 // Web button
                 Button { onOpenWeb(task) } label: {
                     Image(systemName: "safari")
@@ -480,6 +482,14 @@ struct TaskRow: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.green)
+
+                // Archive button
+                Button { onArchive(task) } label: {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 18, design: .monospaced))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.orange)
             }
         }
         .padding(.horizontal, 16)
