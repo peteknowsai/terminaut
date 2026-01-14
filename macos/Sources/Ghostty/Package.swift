@@ -409,7 +409,6 @@ extension Notification.Name {
 
     /// Notification sent when text is copied to clipboard (e.g., copy-on-select)
     static let ghosttyDidCopyToClipboard = Notification.Name("com.mitchellh.ghostty.didCopyToClipboard")
-    static let CopiedTextKey = ghosttyDidCopyToClipboard.rawValue + ".text"
 }
 
 // NOTE: I am moving all of these to Notification.Name extensions over time. This

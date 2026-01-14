@@ -409,9 +409,9 @@ extension Ghostty {
                    let textContent = contentArray.first(where: { $0.mime == "text/plain" }) {
                     DispatchQueue.main.async {
                         NotificationCenter.default.post(
-                            name: Notification.Name.ghosttyDidCopyToClipboard,
+                            name: .ghosttyDidCopyToClipboard,
                             object: surface,
-                            userInfo: [Notification.Name.CopiedTextKey: textContent.data]
+                            userInfo: ["copiedText": textContent.data]
                         )
                     }
                 }
