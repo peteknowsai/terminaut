@@ -60,33 +60,140 @@ class TerminautCoordinator: ObservableObject {
                 self?.handleControllerButton(button)
             }
             .store(in: &controllerCancellables)
+
+        // Handle D-pad direction for vim mode navigation
+        controllerManager.$lastDirection
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] direction in
+                self?.handleControllerDirection(direction)
+            }
+            .store(in: &controllerCancellables)
     }
 
     private func handleControllerButton(_ button: GameControllerManager.ControllerButton) {
-        // Global actions that work regardless of current view
+        let vimMode = controllerManager.vimModeActive
+
+        // Back paddles - always active
         switch button {
+        case .rightPaddle:
+            // Right paddle = Escape (always)
+            if !showLauncher {
+                simulateKey(keyCode: 53)
+            }
+            return
+        case .leftPaddle:
+            // Left paddle = Shift-Tab (always)
+            if !showLauncher {
+                simulateShiftTab()
+            }
+            return
+        case .rightStickClick:
+            // R3 = Toggle vim mode (handled in GameControllerManager)
+            return
         case .select:
             // Select = Return to launcher (like Cmd+L)
             returnToLauncher()
+            return
+        default:
+            break
+        }
+
+        // Vim mode button mappings (when in session)
+        if vimMode && !showLauncher {
+            switch button {
+            case .a:
+                simulateKey(keyCode: 36) // Enter
+            case .b:
+                // B in vim mode = 'i' (insert mode) + exit vim mode
+                simulateText("i")
+                controllerManager.vimModeActive = false
+                print("🎮 Vim mode: OFF (pressed B for insert)")
+            case .x:
+                simulateText("dd") // Delete line
+            case .y:
+                simulateText("yy") // Yank line
+            case .leftBumper:
+                simulateText("u") // Undo
+            case .rightBumper:
+                simulateText("p") // Paste
+            default:
+                break
+            }
+            return
+        }
+
+        // Normal mode button mappings
+        switch button {
         case .leftBumper:
-            // L = Previous tab
             previousSession()
         case .rightBumper:
-            // R = Next tab
             nextSession()
         case .a:
-            // A = Enter (when in session)
             if !showLauncher {
-                simulateKey(keyCode: 36) // Return/Enter
+                simulateKey(keyCode: 36) // Enter
             }
         case .b:
-            // B = Escape (when in session)
+            // B = Escape (enter vim mode in Claude Code) + enable vim mode
             if !showLauncher {
                 simulateKey(keyCode: 53) // Escape
+                controllerManager.vimModeActive = true
+                print("🎮 Vim mode: ON (pressed B for Escape)")
             }
         default:
-            // Other buttons are handled by the active view (LauncherView or SessionView)
+            // Other buttons handled by LauncherView
             break
+        }
+    }
+
+    private func handleControllerDirection(_ direction: GameControllerManager.ControllerDirection) {
+        // Only handle directions in vim mode when in a session
+        guard controllerManager.vimModeActive && !showLauncher else { return }
+
+        switch direction {
+        case .up:
+            simulateText("k") // Move up
+        case .down:
+            simulateText("j") // Move down
+        case .left:
+            simulateText("b") // Back word
+        case .right:
+            simulateText("w") // Forward word
+        }
+    }
+
+    private func simulateShiftTab() {
+        guard let window = NSApp.keyWindow else { return }
+
+        // Create Shift+Tab key event
+        if let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.shift],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "\u{19}", // Shift-Tab character
+            charactersIgnoringModifiers: "\t",
+            isARepeat: false,
+            keyCode: 48 // Tab key code
+        ) {
+            window.sendEvent(event)
+        }
+
+        if let event = NSEvent.keyEvent(
+            with: .keyUp,
+            location: .zero,
+            modifierFlags: [.shift],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "\u{19}",
+            charactersIgnoringModifiers: "\t",
+            isARepeat: false,
+            keyCode: 48
+        ) {
+            window.sendEvent(event)
         }
     }
 
@@ -135,6 +242,80 @@ class TerminautCoordinator: ObservableObject {
             keyCode: UInt16(keyCode)
         ) {
             window.sendEvent(event)
+        }
+    }
+
+    /// Simulate typing a string of text
+    private func simulateText(_ text: String) {
+        guard let window = NSApp.keyWindow else { return }
+
+        for char in text {
+            let charStr = String(char)
+
+            // Create key down event
+            if let event = NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                characters: charStr,
+                charactersIgnoringModifiers: charStr,
+                isARepeat: false,
+                keyCode: keyCodeForCharacter(char)
+            ) {
+                window.sendEvent(event)
+            }
+
+            // Create key up event
+            if let event = NSEvent.keyEvent(
+                with: .keyUp,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                characters: charStr,
+                charactersIgnoringModifiers: charStr,
+                isARepeat: false,
+                keyCode: keyCodeForCharacter(char)
+            ) {
+                window.sendEvent(event)
+            }
+        }
+    }
+
+    /// Get the key code for a character (simplified mapping)
+    private func keyCodeForCharacter(_ char: Character) -> UInt16 {
+        switch char {
+        case "d": return 2
+        case "a": return 0
+        case "s": return 1
+        case "f": return 3
+        case "g": return 5
+        case "h": return 4
+        case "j": return 38
+        case "k": return 40
+        case "l": return 37
+        case "q": return 12
+        case "w": return 13
+        case "e": return 14
+        case "r": return 15
+        case "t": return 17
+        case "y": return 16
+        case "u": return 32
+        case "i": return 34
+        case "o": return 31
+        case "p": return 35
+        case "z": return 6
+        case "x": return 7
+        case "c": return 8
+        case "v": return 9
+        case "b": return 11
+        case "n": return 45
+        case "m": return 46
+        default: return 0
         }
     }
 

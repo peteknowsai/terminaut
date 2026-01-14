@@ -20,22 +20,32 @@ class GameControllerManager: ObservableObject {
     /// Right trigger held state (for voice dictation)
     @Published var rightTriggerHeld: Bool = false
 
+    /// Right stick scroll value (-1 to 1, negative = scroll up, positive = scroll down)
+    @Published var scrollValue: Float = 0
+
+    /// Vim mode active state
+    @Published var vimModeActive: Bool = false
+
     /// Is a controller currently connected?
     var isConnected: Bool { connectedController != nil }
 
     private var cancellables = Set<AnyCancellable>()
+    private var scrollTimer: Timer?
 
     // MARK: - Button Types
 
     enum ControllerButton: String {
-        case a = "A"           // Confirm (Enter)
-        case b = "B"           // Back (Escape)
-        case x = "X"           // New session (N)
-        case y = "Y"           // Sessions list (S)
-        case leftBumper = "L"  // Previous tab
-        case rightBumper = "R" // Next tab
+        case a = "A"           // Confirm (Enter) / vim: Enter
+        case b = "B"           // vim: insert mode (i)
+        case x = "X"           // vim: delete line (dd)
+        case y = "Y"           // vim: yank line (yy)
+        case leftBumper = "L"  // Previous tab / vim: undo (u)
+        case rightBumper = "R" // Next tab / vim: paste (p)
         case start = "Start"   // Menu
-        case select = "Select" // Options
+        case select = "Select" // Return to launcher
+        case leftPaddle = "L4" // Shift-Tab
+        case rightPaddle = "R4" // Escape
+        case rightStickClick = "R3" // Toggle vim mode
     }
 
     enum ControllerDirection: String {
@@ -167,6 +177,98 @@ class GameControllerManager: ObservableObject {
         gamepad.rightTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
             self?.handleRightTrigger(pressed: pressed)
         }
+
+        // Right stick - Terminal scrolling
+        gamepad.rightThumbstick.valueChangedHandler = { [weak self] _, _, yValue in
+            self?.handleRightThumbstick(y: yValue)
+        }
+
+        // Right stick click (R3) - Toggle vim mode
+        gamepad.rightThumbstickButton?.pressedChangedHandler = { [weak self] _, _, pressed in
+            if pressed { self?.toggleVimMode() }
+        }
+
+        // Left trigger (L2) - Left paddle action (Shift-Tab)
+        gamepad.leftTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            if pressed { self?.handleButton(.leftPaddle) }
+        }
+
+        // Note: 8BitDo Pro 2 back paddles are programmable on the controller itself
+        // They can be mapped to any button. For now, we use L2 for Shift-Tab
+        // and the physical back paddle can be programmed to L2 via 8BitDo Ultimate Software
+
+        // Home button - could be used for special actions
+        gamepad.buttonHome?.pressedChangedHandler = { [weak self] _, _, pressed in
+            if pressed {
+                print("🎮 Home button pressed")
+            }
+        }
+    }
+
+    // MARK: - Vim Mode
+
+    private func toggleVimMode() {
+        DispatchQueue.main.async {
+            self.vimModeActive.toggle()
+            print("🎮 Vim mode: \(self.vimModeActive ? "ON" : "OFF")")
+        }
+    }
+
+    // MARK: - Terminal Scrolling (Right Stick)
+
+    private let scrollDeadzone: Float = 0.3
+
+    private func handleRightThumbstick(y: Float) {
+        // Apply deadzone
+        if abs(y) < scrollDeadzone {
+            stopScrolling()
+            return
+        }
+
+        // Invert: stick up (positive y) = scroll up (see earlier content)
+        let scrollDirection = -y
+
+        DispatchQueue.main.async {
+            self.scrollValue = scrollDirection
+        }
+
+        startScrolling(direction: scrollDirection)
+    }
+
+    private func startScrolling(direction: Float) {
+        // Stop any existing timer
+        scrollTimer?.invalidate()
+
+        // Calculate scroll speed based on stick deflection
+        let speed = abs(direction)
+        let interval = Double(0.05 / speed)  // Faster when pushed further
+
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: max(0.02, interval), repeats: true) { [weak self] _ in
+            self?.sendScrollEvent(direction: direction)
+        }
+
+        // Fire immediately
+        sendScrollEvent(direction: direction)
+    }
+
+    private func stopScrolling() {
+        scrollTimer?.invalidate()
+        scrollTimer = nil
+        DispatchQueue.main.async {
+            self.scrollValue = 0
+        }
+    }
+
+    private func sendScrollEvent(direction: Float) {
+        // Create scroll wheel event
+        // Positive direction = scroll up (content moves down), negative = scroll down
+        let scrollAmount = Int32(direction * 3)  // 3 lines per tick
+
+        guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: scrollAmount, wheel2: 0, wheel3: 0) else {
+            return
+        }
+
+        event.post(tap: .cghidEventTap)
     }
 
     // MARK: - Voice Dictation (Right Trigger)
