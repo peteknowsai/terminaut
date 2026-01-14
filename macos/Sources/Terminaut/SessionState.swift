@@ -16,6 +16,7 @@ struct SessionState: Codable {
     var currentTool: String?
     var todos: [TodoItem]?
     var openPRs: [PullRequest]?
+    var backgroundTasks: [BackgroundTask]?
     var timestamp: Date?
     var context: ContextBreakdown?
 
@@ -40,6 +41,13 @@ struct SessionState: Codable {
             guard let s = state?.uppercased() else { return false }
             return s == "CLOSED" || s == "MERGED"
         }
+    }
+
+    struct BackgroundTask: Codable, Identifiable {
+        var id: String { sessionId }
+        let sessionId: String        // "session_01QyJaqsWfPirdYTWAmM8uRo"
+        let description: String      // from <background-task-input>
+        let webUrl: String           // "https://claude.ai/code/session_..."
     }
 
     /// Context window usage data from Claude Code

@@ -230,6 +230,27 @@ if [ "$HAS_JQ" -eq 1 ]; then
   fi
   [ -z "$todos_json" ] || [ "$todos_json" = "null" ] && todos_json="[]"
 
+  # Extract background tasks from JSONL transcript
+  background_tasks="[]"
+  if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    # Extract session IDs from background-task-output blocks
+    background_tasks=$(grep -o '<background-task-output>[^<]*</background-task-output>' "$transcript_path" 2>/dev/null | \
+      sed 's/<[^>]*>//g' | \
+      while read -r output; do
+        session_id=$(echo "$output" | grep -oE 'session_[a-zA-Z0-9]+' | head -1)
+        if [ -n "$session_id" ]; then
+          web_url="https://claude.ai/code/$session_id"
+          # Get corresponding input (description) - look for preceding background-task-input
+          desc=$(grep -B10 "$session_id" "$transcript_path" 2>/dev/null | grep -o '<background-task-input>[^<]*</background-task-input>' | tail -1 | sed 's/<[^>]*>//g')
+          [ -z "$desc" ] && desc="Background task"
+          # Escape description for JSON
+          desc_escaped=$(echo "$desc" | sed 's/"/\\"/g' | tr -d '\n')
+          echo "{\"sessionId\":\"$session_id\",\"description\":\"$desc_escaped\",\"webUrl\":\"$web_url\"}"
+        fi
+      done | jq -s 'unique_by(.sessionId)' 2>/dev/null || echo "[]")
+  fi
+  [ -z "$background_tasks" ] || [ "$background_tasks" = "null" ] && background_tasks="[]"
+
   # Fetch open PRs from origin repo (not upstream) - only for peteknowsai repos
   open_prs="[]"
   # Find gh binary (might not be in PATH)
@@ -289,6 +310,7 @@ if [ "$HAS_JQ" -eq 1 ]; then
   "gitBehind": ${git_behind_remote:-0},
   "todos": $todos_json,
   "openPRs": $open_prs,
+  "backgroundTasks": $background_tasks,
   "context": {
     "totalInputTokens": ${total_input:-0},
     "totalOutputTokens": ${total_output:-0},

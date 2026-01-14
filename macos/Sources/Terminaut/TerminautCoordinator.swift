@@ -116,6 +116,24 @@ class TerminautCoordinator: ObservableObject {
         showLauncher = false
     }
 
+    /// Teleport to an existing Claude Code session (creates new tab)
+    func teleportToSession(_ sessionId: String) {
+        guard let project = activeProject,
+              let ghostty = ghosttyApp,
+              let app = ghostty.app else { return }
+
+        // Create surface with teleport command instead of normal claude startup
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = project.path
+        config.environmentVariables["TERM_PROGRAM"] = "Apple_Terminal"
+        config.initialInput = "exec claude --teleport \(sessionId)\n"
+
+        let surfaceView = Ghostty.SurfaceView(app, baseConfig: config)
+        let session = Session(project: project, surfaceView: surfaceView)
+        activeSessions.append(session)
+        selectedSessionIndex = activeSessions.count - 1
+    }
+
     /// Switch to next session tab
     func nextSession() {
         guard !activeSessions.isEmpty else { return }

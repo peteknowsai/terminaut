@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import GhosttyKit
 
 /// Root view for Terminaut - switches between launcher and session
@@ -84,7 +85,10 @@ struct TerminautSessionView: View {
                 ControlPanelView(
                     project: project,
                     stateWatcher: stateWatcher,
-                    onReturnToLauncher: onReturnToLauncher
+                    onReturnToLauncher: onReturnToLauncher,
+                    onTeleport: { sessionId in
+                        coordinator.teleportToSession(sessionId)
+                    }
                 )
                 .frame(width: geometry.size.width * 0.25)
             }
@@ -190,6 +194,7 @@ struct ControlPanelView: View {
     let project: Project
     @ObservedObject var stateWatcher: SessionStateWatcher
     let onReturnToLauncher: () -> Void
+    let onTeleport: (String) -> Void  // sessionId -> teleport to that session
 
     @State private var selectedPanel: Int = 0
 
@@ -216,8 +221,18 @@ struct ControlPanelView: View {
                     // Git panel
                     GitPanel(state: stateWatcher.state)
 
-                    // Agents/Background panel (placeholder)
-                    AgentsPanel()
+                    // Tasks panel (background tasks with teleport)
+                    TasksPanel(
+                        state: stateWatcher.state,
+                        onOpenWeb: { task in
+                            if let url = URL(string: task.webUrl) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        },
+                        onTeleport: { task in
+                            onTeleport(task.sessionId)
+                        }
+                    )
                 }
                 .padding(12)
             }
@@ -405,18 +420,70 @@ struct QuotaPanel: View {
     }
 }
 
-struct AgentsPanel: View {
+struct TasksPanel: View {
+    let state: SessionState
+    let onOpenWeb: (SessionState.BackgroundTask) -> Void
+    let onTeleport: (SessionState.BackgroundTask) -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            panelHeader("AGENTS / BACKGROUND")
+            panelHeader("TASKS")
 
-            Text("No background tasks")
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(.gray)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+            if let tasks = state.backgroundTasks, !tasks.isEmpty {
+                ForEach(tasks) { task in
+                    TaskRow(task: task, onOpenWeb: onOpenWeb, onTeleport: onTeleport)
+                }
+            } else {
+                Text("No background tasks")
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+            }
         }
         .background(panelBackground)
+    }
+}
+
+struct TaskRow: View {
+    let task: SessionState.BackgroundTask
+    let onOpenWeb: (SessionState.BackgroundTask) -> Void
+    let onTeleport: (SessionState.BackgroundTask) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(task.description)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.white)
+                .lineLimit(2)
+
+            HStack(spacing: 8) {
+                // Session ID badge
+                Text(String(task.sessionId.prefix(20)) + "...")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray)
+
+                Spacer()
+
+                // Web button
+                Button { onOpenWeb(task) } label: {
+                    Image(systemName: "safari")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.blue)
+
+                // Teleport button
+                Button { onTeleport(task) } label: {
+                    Image(systemName: "arrow.right.circle")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.green)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 }
 
