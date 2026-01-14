@@ -262,7 +262,7 @@ class GameControllerManager: ObservableObject {
     private func sendScrollEvent(direction: Float) {
         // Create scroll wheel event
         // Positive direction = scroll up (content moves down), negative = scroll down
-        let scrollAmount = Int32(direction * 3)  // 3 lines per tick
+        let scrollAmount = Int32(direction * 1.5)  // 1.5 lines per tick (was 3)
 
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: scrollAmount, wheel2: 0, wheel3: 0) else {
             return

@@ -74,7 +74,7 @@ class TerminautCoordinator: ObservableObject {
     private func handleControllerButton(_ button: GameControllerManager.ControllerButton) {
         let vimMode = controllerManager.vimModeActive
 
-        // Back paddles - always active
+        // Global actions - always active regardless of vim mode
         switch button {
         case .rightPaddle:
             // Right paddle = Escape (always)
@@ -95,6 +95,14 @@ class TerminautCoordinator: ObservableObject {
             // Select = Return to launcher (like Cmd+L)
             returnToLauncher()
             return
+        case .leftBumper:
+            // L bumper = Previous tab (always)
+            previousSession()
+            return
+        case .rightBumper:
+            // R bumper = Next tab (always)
+            nextSession()
+            return
         default:
             break
         }
@@ -113,10 +121,6 @@ class TerminautCoordinator: ObservableObject {
                 simulateText("dd") // Delete line
             case .y:
                 simulateText("yy") // Yank line
-            case .leftBumper:
-                simulateText("u") // Undo
-            case .rightBumper:
-                simulateText("p") // Paste
             default:
                 break
             }
@@ -125,10 +129,6 @@ class TerminautCoordinator: ObservableObject {
 
         // Normal mode button mappings
         switch button {
-        case .leftBumper:
-            previousSession()
-        case .rightBumper:
-            nextSession()
         case .a:
             if !showLauncher {
                 simulateKey(keyCode: 36) // Enter
