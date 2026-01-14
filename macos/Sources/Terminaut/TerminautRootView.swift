@@ -257,16 +257,16 @@ struct ControlPanelView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(project.name)
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
 
                     Text(appVersion)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 16, design: .monospaced))
                         .foregroundColor(.orange)
                 }
 
                 Text(project.path)
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(.system(size: 16, design: .monospaced))
                     .foregroundColor(.gray)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -279,7 +279,7 @@ struct ControlPanelView: View {
                 onReturnToLauncher()
             } label: {
                 Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 20))
+                    .font(.system(size: 28, design: .monospaced))
                     .foregroundColor(.gray)
             }
             .buttonStyle(.plain)
@@ -295,7 +295,7 @@ struct ControlPanelView: View {
             controlHint(key: "B", action: "Back")
             controlHint(key: "Start", action: "Launcher")
         }
-        .font(.system(size: 12, design: .monospaced))
+        .font(.system(size: 16, design: .monospaced))
         .foregroundColor(.gray)
         .padding(16)
     }
@@ -320,7 +320,7 @@ struct ContextPanel: View {
     var body: some View {
         HStack(spacing: 12) {
             Text("CONTEXT")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
                 .foregroundColor(.gray)
 
             // Progress bar
@@ -334,13 +334,13 @@ struct ContextPanel: View {
                         .frame(width: geo.size.width * contextPercent / 100)
                 }
             }
-            .frame(height: 16)
+            .frame(height: 20)
 
             // Percentage
             Text("\(Int(contextPercent))%")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(.system(size: 20, weight: .bold, design: .monospaced))
                 .foregroundColor(contextColor)
-                .frame(width: 45, alignment: .trailing)
+                .frame(width: 60, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -368,7 +368,7 @@ struct QuotaPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Text("USAGE")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(.gray)
 
                 // Progress bar
@@ -382,20 +382,20 @@ struct QuotaPanel: View {
                             .frame(width: geo.size.width * quotaPercent / 100)
                     }
                 }
-                .frame(height: 16)
+                .frame(height: 20)
 
                 // Percentage
                 Text("\(Int(quotaPercent))%")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .foregroundColor(quotaColor)
-                    .frame(width: 45, alignment: .trailing)
+                    .frame(width: 60, alignment: .trailing)
             }
 
             // Reset time
             HStack {
                 Spacer()
                 Text("Resets \(resetTimeString)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(.gray)
             }
         }
@@ -435,7 +435,7 @@ struct TasksPanel: View {
                 }
             } else {
                 Text("No background tasks")
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.system(size: 16, design: .monospaced))
                     .foregroundColor(.gray)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 10)
@@ -453,14 +453,14 @@ struct TaskRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(task.description)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 16, design: .monospaced))
                 .foregroundColor(.white)
                 .lineLimit(2)
 
             HStack(spacing: 8) {
                 // Session ID badge
                 Text(String(task.sessionId.prefix(20)) + "...")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(.gray)
 
                 Spacer()
@@ -468,7 +468,7 @@ struct TaskRow: View {
                 // Web button
                 Button { onOpenWeb(task) } label: {
                     Image(systemName: "safari")
-                        .font(.system(size: 12))
+                        .font(.system(size: 18, design: .monospaced))
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.blue)
@@ -476,7 +476,7 @@ struct TaskRow: View {
                 // Teleport button
                 Button { onTeleport(task) } label: {
                     Image(systemName: "arrow.right.circle")
-                        .font(.system(size: 12))
+                        .font(.system(size: 18, design: .monospaced))
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.green)

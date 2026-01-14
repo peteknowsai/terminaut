@@ -6,7 +6,7 @@ import SwiftUI
 func panelHeader(_ title: String) -> some View {
     HStack {
         Text(title)
-            .font(.system(size: 13, weight: .bold, design: .monospaced))
+            .font(.system(size: 16, weight: .bold, design: .monospaced))
             .foregroundColor(.gray)
             .tracking(1.5)
 

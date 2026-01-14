@@ -18,7 +18,7 @@ struct TodosPanel: View {
                 .padding(.vertical, 10)
             } else {
                 Text("No active tasks")
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.system(size: 16, design: .monospaced))
                     .foregroundColor(.gray)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -36,11 +36,11 @@ struct TodosPanel: View {
             VStack(alignment: .leading, spacing: 2) {
                 if todo.status == "in_progress", let activeForm = todo.activeForm {
                     Text(activeForm)
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .font(.system(size: 16, weight: .medium, design: .monospaced))
                         .foregroundColor(.cyan)
                 } else {
                     Text(todo.content)
-                        .font(.system(size: 14, design: .monospaced))
+                        .font(.system(size: 16, design: .monospaced))
                         .foregroundColor(todo.status == "completed" ? .gray : .white)
                         .strikethrough(todo.status == "completed")
                 }
@@ -65,6 +65,6 @@ struct TodosPanel: View {
                     .foregroundColor(.gray)
             }
         }
-        .font(.system(size: 16))
+        .font(.system(size: 18, design: .monospaced))
     }
 }
