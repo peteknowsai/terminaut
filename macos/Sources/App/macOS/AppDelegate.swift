@@ -1314,6 +1314,10 @@ extension AppDelegate {
             font-family = SF Mono Terminal
             font-size = 18
             adjust-cell-height = 10%
+
+            # Colors (matches Terminal.app Basic profile)
+            background = 191D27
+            foreground = E0E0E0
             """
             try? defaults.write(to: configFile, atomically: true, encoding: .utf8)
             Self.logger.info("Created Terminaut config at \(configFile.path)")
